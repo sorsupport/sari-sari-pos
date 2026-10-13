@@ -38,7 +38,8 @@ a { color: var(--primary); }
   padding: 0.75rem 1.5rem;
 }
 
-.topbar-brand { font-weight: 700; font-size: 1.1rem; }
+.topbar-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.1rem; }
+.topbar-brand img { width: 42px; height: 42px; object-fit: contain; }
 .topbar-nav { display: flex; gap: 1rem; flex: 1; }
 .topbar-nav a { text-decoration: none; color: var(--text); font-weight: 500; }
 .topbar-nav a:hover { color: var(--primary); }
@@ -169,6 +170,8 @@ a { color: var(--primary); }
   gap: 1rem;
 }
 .login-card h1 { margin: 0; font-size: 1.3rem; }
+.auth-brand { display: flex; align-items: center; gap: 0.75rem; }
+.auth-brand img { width: 60px; height: 60px; object-fit: contain; }
 
 /* POS screen */
 .pos-layout {
