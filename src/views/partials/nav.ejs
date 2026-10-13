@@ -1,5 +1,8 @@
 <header class="topbar">
-  <div class="topbar-brand">🏪 Sari-Sari POS</div>
+  <div class="topbar-brand">
+    <img src="/mang-inasal-logo.jpg" alt="Mang Inasal logo" />
+    <span>Sari-Sari POS</span>
+  </div>
   <nav class="topbar-nav">
     <% if (currentUser && currentUser.role === 'admin') { %>
       <a href="/admin/dashboard">Dashboard</a>
