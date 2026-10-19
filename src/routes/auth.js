@@ -123,7 +123,8 @@ router.post('/request-access', async (req, res, next) => {
     full_name: clean(req.body.full_name),
     username: clean(req.body.username).toLowerCase(),
     contact: clean(req.body.contact),
-    role: req.body.role === 'admin' ? 'admin' : 'sales_rep',
+    // Only sales reps can request access; admins are added from Admin > Users.
+    role: 'sales_rep',
     note: clean(req.body.note),
   };
   const errors = {};

@@ -409,6 +409,9 @@ textarea.auth-input {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 .auth-segment input:focus-visible + span { outline: 2px solid var(--auth-ink); outline-offset: 1px; }
+.auth-segment label.is-disabled { cursor: not-allowed; }
+.auth-segment input:disabled + span { color: var(--auth-faint); }
+.auth-hint { margin: 0; font-size: 0.78rem; color: var(--auth-muted); }
 
 .auth-btn {
   display: flex;

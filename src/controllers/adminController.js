@@ -243,11 +243,13 @@ async function approveAccessRequest(req, res, next) {
       return res.redirect('/admin/users');
     }
 
+    // Requests only ever create sales reps, even ones submitted before the
+    // Admin option was disabled; admins are added with the "Add User" form.
     const password = tempPassword();
     await client.query(
       `INSERT INTO users (username, password_hash, full_name, role, contact, must_change_password)
-       VALUES ($1, $2, $3, $4, $5, TRUE)`,
-      [request.username, bcrypt.hashSync(password, 10), request.full_name, request.role, request.contact]
+       VALUES ($1, $2, $3, 'sales_rep', $4, TRUE)`,
+      [request.username, bcrypt.hashSync(password, 10), request.full_name, request.contact]
     );
     await client.query("UPDATE access_requests SET status = 'approved', resolved_at = NOW() WHERE id = $1", [
       request.id,

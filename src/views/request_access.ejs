@@ -29,9 +29,10 @@
   <fieldset class="auth-field">
     <legend>Role</legend>
     <div class="auth-segment">
-      <label><input type="radio" name="role" value="sales_rep" <%= values.role !== 'admin' ? 'checked' : '' %> /><span>Sales Representative</span></label>
-      <label><input type="radio" name="role" value="admin" <%= values.role === 'admin' ? 'checked' : '' %> /><span>Admin</span></label>
+      <label><input type="radio" name="role" value="sales_rep" checked /><span>Sales Representative</span></label>
+      <label class="is-disabled" title="Admin accounts can't be requested"><input type="radio" value="admin" disabled aria-describedby="role-hint" /><span>Admin</span></label>
     </div>
+    <p class="auth-hint" id="role-hint">Admin accounts are only added by the store admin.</p>
   </fieldset>
   <div class="auth-field">
     <label for="note">Note <span class="auth-optional">(optional)</span></label>
