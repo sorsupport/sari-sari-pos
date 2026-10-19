@@ -3,6 +3,69 @@
 <main class="container">
   <h1>Users</h1>
 
+  <% if (accessRequests.length) { %>
+    <div class="card">
+      <h2>Access Requests</h2>
+      <p class="muted">Approving creates the account with a temporary password for you to send them. They choose their own on first sign-in.</p>
+      <div class="table-scroll">
+        <table class="table">
+          <thead><tr><th>Full Name</th><th>Username</th><th>Contact</th><th>Role</th><th>Note</th><th>Requested</th><th></th></tr></thead>
+          <tbody>
+            <% accessRequests.forEach(r => { %>
+              <tr>
+                <td><%= r.full_name %></td>
+                <td><%= r.username %></td>
+                <td><%= r.contact %></td>
+                <td><%= r.role === 'admin' ? 'Admin' : 'Sales Rep' %></td>
+                <td><%= r.note || '—' %></td>
+                <td><%= r.created_at.toLocaleString() %></td>
+                <td class="nowrap">
+                  <form method="POST" action="/admin/access-requests/<%= r.id %>/approve" class="inline-form">
+                    <button type="submit" class="btn btn-small btn-primary">Approve</button>
+                  </form>
+                  <form method="POST" action="/admin/access-requests/<%= r.id %>/reject" class="inline-form">
+                    <button type="submit" class="btn btn-small btn-danger">Reject</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% } %>
+
+  <% if (resetRequests.length) { %>
+    <div class="card">
+      <h2>Password Reset Requests</h2>
+      <p class="muted">Setting a temporary password replaces their current one. They choose a new one on their next sign-in.</p>
+      <div class="table-scroll">
+        <table class="table">
+          <thead><tr><th>Username</th><th>Full Name</th><th>Contact</th><th>Message</th><th>Requested</th><th></th></tr></thead>
+          <tbody>
+            <% resetRequests.forEach(r => { %>
+              <tr>
+                <td><%= r.username %></td>
+                <td><%= r.full_name %></td>
+                <td><%= r.contact || '—' %></td>
+                <td><%= r.message || '—' %></td>
+                <td><%= r.created_at.toLocaleString() %></td>
+                <td class="nowrap">
+                  <form method="POST" action="/admin/password-resets/<%= r.id %>/resolve" class="inline-form">
+                    <button type="submit" class="btn btn-small btn-primary">Set temporary password</button>
+                  </form>
+                  <form method="POST" action="/admin/password-resets/<%= r.id %>/dismiss" class="inline-form">
+                    <button type="submit" class="btn btn-small btn-secondary">Dismiss</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% } %>
+
   <div class="card">
     <h2>Add User</h2>
     <form method="POST" action="/admin/users" class="form-grid">

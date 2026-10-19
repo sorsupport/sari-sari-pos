@@ -1,0 +1,43 @@
+    </div>
+    <footer class="auth-footer">&copy; 2026 rgrafia (SorSU)</footer>
+  </main>
+</div>
+<script>
+  // Inline "required" messages under each field, matching the server-side ones.
+  document.querySelectorAll('form[data-validate]').forEach(function (form) {
+    function setError(field, message) {
+      var wrap = field.closest('.auth-field');
+      var text = wrap.querySelector('.auth-error-text');
+      wrap.classList.toggle('has-error', Boolean(message));
+      field.setAttribute('aria-invalid', message ? 'true' : 'false');
+      if (message && !text) {
+        text = document.createElement('p');
+        text.className = 'auth-error-text';
+        text.id = field.id + '-error';
+        field.setAttribute('aria-describedby', text.id);
+        field.insertAdjacentElement('afterend', text);
+      }
+      if (text) text.textContent = message || '';
+      if (!message && text) text.remove();
+    }
+    form.querySelectorAll('[data-required]').forEach(function (field) {
+      field.addEventListener('input', function () {
+        if (field.value.trim()) setError(field, '');
+      });
+    });
+    form.addEventListener('submit', function (e) {
+      var firstInvalid = null;
+      form.querySelectorAll('[data-required]').forEach(function (field) {
+        var missing = !field.value.trim();
+        setError(field, missing ? field.dataset.required : '');
+        if (missing && !firstInvalid) firstInvalid = field;
+      });
+      if (firstInvalid) {
+        e.preventDefault();
+        firstInvalid.focus();
+      }
+    });
+  });
+</script>
+</body>
+</html>

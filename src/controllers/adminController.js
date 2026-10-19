@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
-const { query } = require('../config/db');
+const { query, getClient } = require('../config/db');
 const { setFlash } = require('../middleware/flash');
+const { tempPassword } = require('../utils/helpers');
 
 async function dashboard(req, res, next) {
   try {
@@ -157,10 +158,16 @@ async function createCategory(req, res, next) {
 
 async function listUsers(req, res, next) {
   try {
-    const { rows: users } = await query(
-      'SELECT id, username, full_name, role, active, created_at FROM users ORDER BY role, username'
-    );
-    res.render('admin/users', { title: 'Users', users });
+    const [{ rows: users }, { rows: accessRequests }, { rows: resetRequests }] = await Promise.all([
+      query('SELECT id, username, full_name, role, active, created_at FROM users ORDER BY role, username'),
+      query("SELECT * FROM access_requests WHERE status = 'pending' ORDER BY created_at"),
+      query(
+        `SELECT password_reset_requests.*, users.username, users.full_name, users.contact
+         FROM password_reset_requests JOIN users ON users.id = password_reset_requests.user_id
+         WHERE password_reset_requests.status = 'pending' ORDER BY password_reset_requests.created_at`
+      ),
+    ]);
+    res.render('admin/users', { title: 'Users', users, accessRequests, resetRequests });
   } catch (err) {
     next(err);
   }
@@ -192,6 +199,137 @@ async function toggleUserActive(req, res, next) {
       return res.redirect('/admin/users');
     }
     await query('UPDATE users SET active = NOT active WHERE id = $1', [id]);
+    res.redirect('/admin/users');
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---- Access & password-reset requests ----
+
+// Shared on every admin page so the nav can flag requests waiting for review.
+async function pendingRequestCount(req, res, next) {
+  try {
+    const { rows } = await query(
+      `SELECT (SELECT COUNT(*) FROM access_requests WHERE status = 'pending')
+            + (SELECT COUNT(*) FROM password_reset_requests WHERE status = 'pending') AS count`
+    );
+    res.locals.pendingRequests = Number(rows[0].count);
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function approveAccessRequest(req, res, next) {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      "SELECT * FROM access_requests WHERE id = $1 AND status = 'pending' FOR UPDATE",
+      [req.params.id]
+    );
+    const request = rows[0];
+    if (!request) {
+      await client.query('ROLLBACK');
+      setFlash(req, 'error', 'That request was already handled.');
+      return res.redirect('/admin/users');
+    }
+
+    const { rows: taken } = await client.query('SELECT 1 FROM users WHERE LOWER(username) = $1', [request.username]);
+    if (taken.length) {
+      await client.query('ROLLBACK');
+      setFlash(req, 'error', `The username "${request.username}" is already taken. Reject this request or add the user manually.`);
+      return res.redirect('/admin/users');
+    }
+
+    const password = tempPassword();
+    await client.query(
+      `INSERT INTO users (username, password_hash, full_name, role, contact, must_change_password)
+       VALUES ($1, $2, $3, $4, $5, TRUE)`,
+      [request.username, bcrypt.hashSync(password, 10), request.full_name, request.role, request.contact]
+    );
+    await client.query("UPDATE access_requests SET status = 'approved', resolved_at = NOW() WHERE id = $1", [
+      request.id,
+    ]);
+    await client.query('COMMIT');
+
+    setFlash(
+      req,
+      'success',
+      `Created "${request.username}". Temporary password: ${password} — send it to ${request.contact}. They'll choose their own when they sign in.`
+    );
+    res.redirect('/admin/users');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
+async function rejectAccessRequest(req, res, next) {
+  try {
+    await query("UPDATE access_requests SET status = 'rejected', resolved_at = NOW() WHERE id = $1 AND status = 'pending'", [
+      req.params.id,
+    ]);
+    setFlash(req, 'success', 'Access request rejected.');
+    res.redirect('/admin/users');
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function resolvePasswordReset(req, res, next) {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT password_reset_requests.id, users.id AS user_id, users.username, users.contact
+       FROM password_reset_requests JOIN users ON users.id = password_reset_requests.user_id
+       WHERE password_reset_requests.id = $1 AND password_reset_requests.status = 'pending'
+       FOR UPDATE OF password_reset_requests`,
+      [req.params.id]
+    );
+    const request = rows[0];
+    if (!request) {
+      await client.query('ROLLBACK');
+      setFlash(req, 'error', 'That request was already handled.');
+      return res.redirect('/admin/users');
+    }
+
+    const password = tempPassword();
+    await client.query('UPDATE users SET password_hash = $1, must_change_password = TRUE WHERE id = $2', [
+      bcrypt.hashSync(password, 10),
+      request.user_id,
+    ]);
+    await client.query("UPDATE password_reset_requests SET status = 'resolved', resolved_at = NOW() WHERE id = $1", [
+      request.id,
+    ]);
+    await client.query('COMMIT');
+
+    const reach = request.contact ? ` Send it to ${request.contact}.` : '';
+    setFlash(
+      req,
+      'success',
+      `Temporary password for "${request.username}": ${password}.${reach} They'll choose a new one when they sign in.`
+    );
+    res.redirect('/admin/users');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
+async function dismissPasswordReset(req, res, next) {
+  try {
+    await query(
+      "UPDATE password_reset_requests SET status = 'dismissed', resolved_at = NOW() WHERE id = $1 AND status = 'pending'",
+      [req.params.id]
+    );
+    setFlash(req, 'success', 'Password reset request dismissed.');
     res.redirect('/admin/users');
   } catch (err) {
     next(err);
@@ -294,6 +432,11 @@ module.exports = {
   listUsers,
   createUser,
   toggleUserActive,
+  pendingRequestCount,
+  approveAccessRequest,
+  rejectAccessRequest,
+  resolvePasswordReset,
+  dismissPasswordReset,
   listSales,
   viewSale,
   listInventoryReports,

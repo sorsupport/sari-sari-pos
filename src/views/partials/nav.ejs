@@ -1,7 +1,7 @@
 <header class="topbar">
   <div class="topbar-brand">
-    <img src="/mang-inasal-logo.jpg" alt="Mang Inasal logo" />
-    <span>Sari-Sari POS</span>
+    <img src="/Luminous%20Metallic%20Crescent%20Emblem.png" alt="MOON crescent emblem" />
+    <span>MOON</span>
   </div>
   <nav class="topbar-nav">
     <% if (currentUser && currentUser.role === 'admin') { %>
@@ -9,7 +9,7 @@
       <a href="/admin/products">Products</a>
       <a href="/admin/sales">Sales</a>
       <a href="/admin/inventory-reports">Inventory Reports</a>
-      <a href="/admin/users">Users</a>
+      <a href="/admin/users">Users<% if (typeof pendingRequests !== 'undefined' && pendingRequests) { %> <span class="nav-badge" title="Requests waiting for review"><%= pendingRequests %></span><% } %></a>
     <% } else if (currentUser && currentUser.role === 'sales_rep') { %>
       <a href="/pos">Point of Sale</a>
       <a href="/pos/inventory">Inventory</a>

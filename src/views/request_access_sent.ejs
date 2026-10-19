@@ -1,0 +1,16 @@
+<%- include('partials/auth_start') %>
+<%- include('partials/auth_back') %>
+<div class="auth-success">
+  <%- include('partials/auth_check') %>
+  <h1 class="auth-title">Request submitted</h1>
+  <p class="auth-lead">Thanks, <strong><%= fullName %></strong>. Your request is waiting for the store admin's approval.</p>
+</div>
+
+<ol class="auth-steps">
+  <li><span>The admin reviews your request.</span></li>
+  <li><span>Once approved, you'll get your username and temporary password at <strong><%= contact %></strong>.</span></li>
+  <li><span>Sign in and set your own password.</span></li>
+</ol>
+
+<a href="/login" class="auth-btn">Back to sign in</a>
+<%- include('partials/auth_end') %>

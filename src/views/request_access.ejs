@@ -1,0 +1,53 @@
+<%- include('partials/auth_start') %>
+<%- include('partials/auth_back') %>
+<h1 class="auth-title">Request access</h1>
+<p class="auth-lead">New to the team? Send your details and the store admin will create your account.</p>
+
+<form method="POST" action="/request-access" novalidate data-validate>
+  <div class="auth-field<%= errors.full_name ? ' has-error' : '' %>">
+    <label for="full_name">Full name</label>
+    <input class="auth-input" type="text" id="full_name" name="full_name" value="<%= values.full_name || '' %>"
+           placeholder="First and last name" autocomplete="name" autofocus data-required="Enter your full name."
+           <% if (errors.full_name) { %>aria-invalid="true" aria-describedby="full_name-error"<% } %> />
+    <%- include('partials/auth_field_error', { id: 'full_name', message: errors.full_name }) %>
+  </div>
+  <div class="auth-field<%= errors.username ? ' has-error' : '' %>">
+    <label for="username">Preferred username</label>
+    <input class="auth-input" type="text" id="username" name="username" value="<%= values.username || '' %>"
+           placeholder="lowercase, no spaces" autocomplete="username" autocapitalize="none" spellcheck="false"
+           maxlength="30" data-required="Choose a username."
+           <% if (errors.username) { %>aria-invalid="true" aria-describedby="username-error"<% } %> />
+    <%- include('partials/auth_field_error', { id: 'username', message: errors.username }) %>
+  </div>
+  <div class="auth-field<%= errors.contact ? ' has-error' : '' %>">
+    <label for="contact">Email or mobile number</label>
+    <input class="auth-input" type="text" id="contact" name="contact" value="<%= values.contact || '' %>"
+           placeholder="So the admin can reach you" autocomplete="email" data-required="Enter an email or mobile number."
+           <% if (errors.contact) { %>aria-invalid="true" aria-describedby="contact-error"<% } %> />
+    <%- include('partials/auth_field_error', { id: 'contact', message: errors.contact }) %>
+  </div>
+  <fieldset class="auth-field">
+    <legend>Role</legend>
+    <div class="auth-segment">
+      <label><input type="radio" name="role" value="sales_rep" <%= values.role !== 'admin' ? 'checked' : '' %> /><span>Sales Representative</span></label>
+      <label><input type="radio" name="role" value="admin" <%= values.role === 'admin' ? 'checked' : '' %> /><span>Admin</span></label>
+    </div>
+  </fieldset>
+  <div class="auth-field">
+    <label for="note">Note <span class="auth-optional">(optional)</span></label>
+    <textarea class="auth-input" id="note" name="note" rows="3" maxlength="500"
+              placeholder="Anything the admin should know"><%= values.note || '' %></textarea>
+  </div>
+
+  <button type="submit" class="auth-btn">Submit request</button>
+</form>
+
+<p class="auth-alt">Already have an account? <a href="/login">Sign in</a></p>
+<script>
+  // Usernames are stored lowercase without spaces; shape it while typing.
+  document.getElementById('username').addEventListener('input', function (e) {
+    var cleaned = e.target.value.toLowerCase().replace(/\s+/g, '');
+    if (cleaned !== e.target.value) e.target.value = cleaned;
+  });
+</script>
+<%- include('partials/auth_end') %>
