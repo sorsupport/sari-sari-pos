@@ -110,6 +110,20 @@
     if (tile) addToCart(tile);
   });
 
+  // GCash and card are paid for the exact total: hide cash fields, ask for a reference.
+  const amountPaidField = document.getElementById('amountPaidField');
+  const paymentRefField = document.getElementById('paymentRefField');
+  const changeRow = document.getElementById('changeRow');
+  checkoutForm.querySelectorAll('input[name="payment_method"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      const isCash = radio.value === 'cash';
+      amountPaidField.hidden = !isCash;
+      changeRow.hidden = !isCash;
+      paymentRefField.hidden = isCash;
+      amountPaidInput.required = isCash;
+    });
+  });
+
   amountPaidInput.addEventListener('input', () => {
     const total = Array.from(cart.values()).reduce((sum, i) => sum + i.price * i.qty, 0);
     updateChange(total);

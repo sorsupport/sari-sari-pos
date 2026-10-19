@@ -599,3 +599,27 @@ textarea.auth-input {
   font-size: 0.8rem;
   padding: 1.5rem 1rem;
 }
+
+/* POS payment method picker */
+.pay-methods {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  border: 0;
+}
+.pay-methods legend { margin-bottom: 0.3rem; font-size: 0.85rem; color: var(--muted); }
+.pay-methods label { position: relative; cursor: pointer; }
+.pay-methods input { position: absolute; opacity: 0; }
+.pay-methods span {
+  display: block;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.pay-methods input:checked + span { border-color: var(--primary); background: #ebf4ff; color: var(--primary); }
+.pay-methods input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 1px; }

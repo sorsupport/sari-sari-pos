@@ -1,79 +1,253 @@
 <%- include('../partials/head') %>
 <%- include('../partials/nav') %>
-<main class="container">
-  <h1>Products</h1>
-
-  <div class="grid-2">
-    <div class="card">
-      <h2>Add Product</h2>
-      <form method="POST" action="/admin/products" class="form-grid">
-        <label>Name <input type="text" name="name" required /></label>
-        <label>Barcode <input type="text" name="barcode" /></label>
-        <label>Category
-          <select name="category_id">
-            <option value="">—</option>
-            <% categories.forEach(c => { %><option value="<%= c.id %>"><%= c.name %></option><% }) %>
-          </select>
-        </label>
-        <label>Unit <input type="text" name="unit" value="pc" /></label>
-        <label>Cost Price <input type="number" step="0.01" name="cost_price" value="0" /></label>
-        <label>Selling Price <input type="number" step="0.01" name="selling_price" required /></label>
-        <label>Stock Quantity <input type="number" name="stock_quantity" value="0" /></label>
-        <label>Reorder Level <input type="number" name="reorder_level" value="5" /></label>
-        <button type="submit" class="btn btn-primary">Add Product</button>
-      </form>
+<%
+  const activeCount = products.filter((p) => p.active).length;
+  const clientProducts = products.map((p) => ({
+    id: p.id, name: p.name, barcode: p.barcode || '', category_id: p.category_id || '',
+    sizes: p.sizes, colors: p.colors, cost_price: p.cost_price, selling_price: p.selling_price,
+    stock_quantity: p.stock_quantity, reorder_level: p.reorder_level, image_url: p.image_url,
+    icon: icon(productIconName(p.name, p.category_name, p.group_name), 30),
+  }));
+%>
+<main class="page">
+  <div class="page-head">
+    <div>
+      <h1 class="page-title">Products</h1>
+      <p class="page-sub">
+        <%= products.length %> product<%= products.length === 1 ? '' : 's' %><% if (activeCount !== products.length) { %> (<%= activeCount %> active)<% } %>
+        · <%= unitsOnHand.toLocaleString('en-US') %> units on hand · click a product to edit
+      </p>
     </div>
-
-    <div class="card">
-      <h2>Add Category</h2>
-      <form method="POST" action="/admin/categories" class="form-inline">
-        <input type="text" name="name" placeholder="Category name" required />
-        <button type="submit" class="btn btn-secondary">Add</button>
-      </form>
-      <h2 style="margin-top: 1.5rem;">Existing Categories</h2>
-      <ul class="plain-list">
-        <% categories.forEach(c => { %><li><%= c.name %></li><% }) %>
-      </ul>
+    <div class="page-actions">
+      <button type="button" class="abtn" id="openImport"><%- icon('upload', 16) %>Import CSV</button>
+      <button type="button" class="abtn abtn-dark" id="newProduct"><%- icon('plus', 16) %>New product</button>
     </div>
   </div>
 
-  <div class="card">
-    <h2>All Products</h2>
-    <div class="table-scroll">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Name</th><th>Category</th><th>Unit</th><th>Cost</th><th>Price</th><th>Stock</th><th>Reorder</th><th>Active</th><th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <% products.forEach(p => { %>
-            <% const fid = 'product-form-' + p.id %>
-            <tr class="<%= !p.active ? 'row-muted' : (p.stock_quantity <= p.reorder_level ? 'row-warning' : '') %>">
-                <td><input form="<%= fid %>" type="text" name="name" value="<%= p.name %>" required /></td>
-                <td>
-                  <select form="<%= fid %>" name="category_id">
-                    <option value="">—</option>
-                    <% categories.forEach(c => { %>
-                      <option value="<%= c.id %>" <%= c.id === p.category_id ? 'selected' : '' %>><%= c.name %></option>
-                    <% }) %>
-                  </select>
-                </td>
-                <td><input form="<%= fid %>" type="text" name="unit" value="<%= p.unit %>" size="4" /></td>
-                <td><input form="<%= fid %>" type="number" step="0.01" name="cost_price" value="<%= p.cost_price %>" size="6" /></td>
-                <td><input form="<%= fid %>" type="number" step="0.01" name="selling_price" value="<%= p.selling_price %>" size="6" /></td>
-                <td><input form="<%= fid %>" type="number" name="stock_quantity" value="<%= p.stock_quantity %>" size="4" /></td>
-                <td><input form="<%= fid %>" type="number" name="reorder_level" value="<%= p.reorder_level %>" size="4" /></td>
-                <td><input form="<%= fid %>" type="checkbox" name="active" value="1" <%= p.active ? 'checked' : '' %> /></td>
-                <td>
-                  <form id="<%= fid %>" method="POST" action="/admin/products/<%= p.id %>"></form>
-                  <button form="<%= fid %>" type="submit" class="btn btn-small">Save</button>
-                </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
+  <div class="products-grid">
+    <div>
+      <div class="filter-pills">
+        <div class="input-icon">
+          <%- icon('search', 16) %>
+          <input class="ainput" type="search" id="productFilter" placeholder="Search name, SKU or barcode" aria-label="Search products" />
+        </div>
+        <button type="button" class="fpill is-active" data-group="">All</button>
+        <% groups.forEach(g => { %><button type="button" class="fpill" data-group="<%= g.id %>"><%= g.name %></button><% }) %>
+        <button type="button" class="fpill fpill-dashed" id="openCategory">+ Category</button>
+      </div>
+      <% if (types.length) { %>
+        <div class="type-chips" id="typeChips">
+          <% types.forEach(t => { %><button type="button" class="tchip" data-type="<%= t.id %>" data-parent="<%= t.parent_id %>"><%= t.name %></button><% }) %>
+        </div>
+      <% } %>
+
+      <div class="panel">
+        <% if (!products.length) { %>
+          <p class="empty">No products yet. Add one with <strong>New product</strong> or import a CSV.</p>
+        <% } else { %>
+          <div class="table-wrap">
+            <table class="atable" id="productTable">
+              <thead>
+                <tr><th>Product</th><th>Sizes · Colors</th><th class="num">Price</th><th>Stock</th><th>Active</th></tr>
+              </thead>
+              <tbody>
+                <% products.forEach(p => {
+                     const margin = p.selling_price > 0 ? Math.round((p.selling_price - p.cost_price) / p.selling_price * 100) : 0;
+                     const low = p.stock_quantity <= p.reorder_level;
+                     const meta = [p.group_name, p.category_name].filter(Boolean); %>
+                  <tr class="is-clickable<%= p.active ? '' : ' is-inactive' %>" data-id="<%= p.id %>" data-group="<%= p.group_id || '' %>"
+                      data-type="<%= p.category_id || '' %>" data-search="<%= (p.name + ' ' + (p.barcode || '')).toLowerCase() %>" tabindex="0">
+                    <td>
+                      <div class="product-cell">
+                        <span class="thumb">
+                          <% if (p.image_url) { %><img src="<%= p.image_url %>" alt="" loading="lazy" /><% } else { %><%- icon(productIconName(p.name, p.category_name, p.group_name), 20) %><% } %>
+                        </span>
+                        <span>
+                          <span class="strong"><%= p.name %></span>
+                          <span class="sub"><%= meta.length ? meta.join(' · ') : 'Uncategorized' %><% if (p.barcode) { %> · <span class="sku"><%= p.barcode %></span><% } %></span>
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <% if (p.sizes.length) { %><div class="size-chips"><% p.sizes.forEach(s => { %><span class="size-chip"><%= s %></span><% }) %></div><% } %>
+                      <% if (p.colors.length) { %><div class="swatches"><% p.colors.forEach(c => { %><span class="swatch" style="background: <%= c %>" title="<%= c %>"></span><% }) %></div><% } %>
+                      <% if (!p.sizes.length && !p.colors.length) { %><span class="sub">—</span><% } %>
+                    </td>
+                    <td class="num">
+                      <span class="strong"><%= peso(p.selling_price) %></span>
+                      <span class="sub">cost <%= peso(p.cost_price) %> · <%= margin %>%</span>
+                    </td>
+                    <td>
+                      <% if (p.stock_quantity === 0) { %><span class="pill pill-bad pill-dot">Out of stock</span>
+                      <% } else if (low) { %><span class="pill pill-bad pill-dot"><%= p.stock_quantity %> · Low</span>
+                      <% } else { %><span class="pill pill-ok pill-dot"><%= p.stock_quantity %> in stock</span><% } %>
+                    </td>
+                    <td>
+                      <input type="checkbox" class="switch" data-active-toggle="<%= p.id %>" <%= p.active ? 'checked' : '' %>
+                             aria-label="<%= p.name %> active" title="<%= p.active ? 'Shown in POS' : 'Hidden from POS' %>" />
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+          <p class="empty" id="noMatches" hidden>No products match.</p>
+        <% } %>
+      </div>
     </div>
+
+    <form class="panel editor" id="productForm" method="POST" action="/admin/products" novalidate>
+      <div class="panel-head">
+        <div>
+          <h2 class="panel-title" id="editorTitle">New product</h2>
+          <p class="panel-sub" id="editorSub">Sizes and colors show as tags; stock is one count per product</p>
+        </div>
+        <button type="button" class="abtn abtn-ghost abtn-sm" id="cancelEdit" hidden>Cancel</button>
+      </div>
+
+      <div class="afield">
+        <span class="afield-label">Product photo</span>
+        <label class="dropzone" id="dropzone">
+          <input type="file" accept="image/jpeg,image/png,image/webp" id="photoInput" aria-label="Product photo" />
+          <span id="dropzoneContent">Drop image or browse</span>
+        </label>
+        <input type="hidden" name="image_data" id="imageData" />
+        <input type="hidden" name="remove_image" id="removeImage" />
+      </div>
+
+      <div class="afield">
+        <label for="pName">Product name</label>
+        <input class="ainput" id="pName" name="name" maxlength="120" placeholder="Product name" required />
+      </div>
+
+      <div class="editor-row">
+        <div class="afield">
+          <label for="pType">Type</label>
+          <select class="ainput" id="pType" name="category_id">
+            <option value="">Uncategorized</option>
+            <% groups.forEach(g => { %>
+              <% if (g.children.length) { %>
+                <optgroup label="<%= g.name %>">
+                  <option value="<%= g.id %>"><%= g.name %> (general)</option>
+                  <% g.children.forEach(c => { %><option value="<%= c.id %>"><%= c.name %></option><% }) %>
+                </optgroup>
+              <% } else { %>
+                <option value="<%= g.id %>"><%= g.name %></option>
+              <% } %>
+            <% }) %>
+          </select>
+        </div>
+        <div class="afield">
+          <label for="pSku">SKU / Barcode</label>
+          <input class="ainput mono" id="pSku" name="barcode" maxlength="60" placeholder="Optional" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="afield">
+        <span class="afield-label" id="sizesLabel">Sizes</span>
+        <div class="size-toggles" role="group" aria-labelledby="sizesLabel">
+          <% sizes.forEach(s => { %><label><input type="checkbox" name="sizes" value="<%= s %>" /><span><%= s %></span></label><% }) %>
+        </div>
+      </div>
+
+      <div class="afield">
+        <span class="afield-label" id="colorsLabel">Colors</span>
+        <div class="color-picker" id="colorPicker" role="group" aria-labelledby="colorsLabel">
+          <label class="color-add" title="Add a color"><%- icon('plus', 14) %>Add<input type="color" id="colorAdd" aria-label="Add a color" /></label>
+        </div>
+      </div>
+
+      <div class="editor-row">
+        <div class="afield">
+          <label for="pCost">Cost price</label>
+          <div class="input-prefix"><span>₱</span><input class="ainput" id="pCost" name="cost_price" type="number" min="0" step="0.01" placeholder="0.00" inputmode="decimal" /></div>
+        </div>
+        <div class="afield">
+          <label for="pPrice">Selling price</label>
+          <div class="input-prefix"><span>₱</span><input class="ainput" id="pPrice" name="selling_price" type="number" min="0" step="0.01" placeholder="0.00" inputmode="decimal" required /></div>
+        </div>
+      </div>
+
+      <div class="editor-row">
+        <div class="afield">
+          <label for="pStock" id="stockLabel">Opening stock</label>
+          <input class="ainput" id="pStock" name="stock_quantity" type="number" min="0" step="1" placeholder="0" inputmode="numeric" />
+        </div>
+        <div class="afield">
+          <label for="pReorder">Reorder level</label>
+          <input class="ainput" id="pReorder" name="reorder_level" type="number" min="0" step="1" value="5" inputmode="numeric" />
+        </div>
+      </div>
+
+      <p class="editor-note" id="editorNote">Products at or below their reorder level show as Low and appear in the dashboard's stock alerts.</p>
+      <p class="form-error" id="formError" role="alert" hidden></p>
+
+      <button type="submit" class="abtn abtn-dark abtn-block" id="saveProduct">
+        <span data-icon="plus" style="display: contents"><%- icon('plus', 16) %></span><span data-icon="check" hidden><%- icon('check', 16) %></span>
+        <span id="saveLabel">Add product</span>
+      </button>
+      <button type="button" class="abtn abtn-danger abtn-block" id="openDelete" hidden><%- icon('trash', 16) %>Delete product</button>
+    </form>
   </div>
 </main>
+
+<div class="modal-backdrop" id="deleteModal" hidden>
+  <form class="modal" id="deleteForm" method="POST" role="dialog" aria-modal="true" aria-labelledby="deleteTitle" novalidate>
+    <div class="modal-icon"><%- icon('trash', 20) %></div>
+    <h2 id="deleteTitle">Delete this product?</h2>
+    <p>This permanently removes <strong data-name></strong> and its photo. Past sales stay in the records. This can't be undone.</p>
+    <div class="afield">
+      <label for="confirmName">Type <strong data-name></strong> to confirm</label>
+      <input class="ainput" id="confirmName" name="confirm_name" autocomplete="off" />
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="abtn" data-close>Cancel</button>
+      <button type="submit" class="abtn abtn-danger" id="confirmDelete" disabled><%- icon('trash', 16) %>Delete product</button>
+    </div>
+  </form>
+</div>
+
+<div class="modal-backdrop" id="categoryModal" hidden>
+  <form class="modal" id="categoryForm" method="POST" action="/admin/categories" role="dialog" aria-modal="true" aria-labelledby="categoryTitle" novalidate>
+    <div class="modal-icon is-neutral"><%- icon('tag', 20) %></div>
+    <h2 id="categoryTitle">New category</h2>
+    <p>Groups (like Tops) appear as filters; types (like Collared) sit inside a group.</p>
+    <div class="afield">
+      <label for="categoryName">Name</label>
+      <input class="ainput" id="categoryName" name="name" maxlength="60" required />
+    </div>
+    <div class="afield">
+      <label for="categoryParent">Inside group</label>
+      <select class="ainput" id="categoryParent" name="parent_id">
+        <option value="">None, this is a new group</option>
+        <% groups.forEach(g => { %><option value="<%= g.id %>"><%= g.name %></option><% }) %>
+      </select>
+    </div>
+    <p class="form-error" data-error hidden></p>
+    <div class="modal-actions">
+      <button type="button" class="abtn" data-close>Cancel</button>
+      <button type="submit" class="abtn abtn-dark"><%- icon('plus', 16) %>Add category</button>
+    </div>
+  </form>
+</div>
+
+<div class="modal-backdrop" id="importModal" hidden>
+  <form class="modal" id="importForm" role="dialog" aria-modal="true" aria-labelledby="importTitle" novalidate>
+    <div class="modal-icon is-neutral"><%- icon('upload', 20) %></div>
+    <h2 id="importTitle">Import products</h2>
+    <p>Upload a CSV with columns <strong>name</strong>, sku, group, type, sizes, colors, cost_price, <strong>selling_price</strong>, stock, reorder_level. Rows whose SKU (or name) matches an existing product update it; the rest are added. <a href="/admin/products/import-template.csv">Download the template</a>.</p>
+    <div class="afield">
+      <label for="importFile">CSV file</label>
+      <input class="ainput" type="file" id="importFile" accept=".csv,text/csv" style="padding-top: 8px" />
+    </div>
+    <p class="form-error" data-error hidden></p>
+    <div class="modal-actions">
+      <button type="button" class="abtn" data-close>Cancel</button>
+      <button type="submit" class="abtn abtn-dark" id="importSubmit" disabled><%- icon('upload', 16) %>Import</button>
+    </div>
+  </form>
+</div>
+
+<script type="application/json" id="productData"><%- JSON.stringify(clientProducts).replace(/</g, '\\u003c') %></script>
+<script src="/js/products.js"></script>
 <%- include('../partials/foot') %>
