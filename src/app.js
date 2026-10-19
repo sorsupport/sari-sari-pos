@@ -3,7 +3,7 @@ const path = require('path');
 const express = require('express');
 const cookieSession = require('cookie-session');
 
-const { requireAuth } = require('./middleware/auth');
+const { requireAuth, homeFor } = require('./middleware/auth');
 const flash = require('./middleware/flash');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
@@ -30,12 +30,19 @@ app.use(
   })
 );
 
+// "Keep me signed in" stretches the cookie to 30 days. cookie-session rewrites
+// the cookie on every request, so the longer lifetime has to be reapplied each time.
+app.use((req, res, next) => {
+  if (req.session.remember) req.sessionOptions.maxAge = 30 * 24 * 60 * 60 * 1000;
+  next();
+});
+
 app.use(flash);
 app.locals.peso = helpers.peso;
 
 app.get('/', (req, res) => {
   if (!req.session.user) return res.redirect('/login');
-  res.redirect(req.session.user.role === 'admin' ? '/admin/dashboard' : '/pos');
+  res.redirect(homeFor(req.session.user));
 });
 
 app.use('/', authRoutes);

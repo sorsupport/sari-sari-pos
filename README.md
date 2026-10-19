@@ -16,8 +16,10 @@ A point-of-sale system for a small sari-sari store, with separate **Admin** and 
 - Inventory screen: view current stock and submit reports (restock, damaged, lost, correction)
 
 **Accounts**
-- Login at `/login`
-- Self-registration at `/register` — anyone can register as Cashier; registering as Admin additionally requires a secret setup code (see [Environment variables](#environment-variables))
+- Sign in at `/login`, with an optional "Keep me signed in" (30 days instead of an 8-hour shift)
+- Request access at `/request-access` — new staff send their name, preferred username, contact and role; an admin approves it from Admin ▸ Users, which creates the account with a temporary password
+- Forgot password at `/forgot-password` — sends a reset request to the admin, who sets a temporary password from Admin ▸ Users
+- Anyone signing in with a temporary password must choose their own before using the app
 
 ## Tech stack
 
@@ -72,7 +74,6 @@ vercel.json               # Vercel routing + function config
    | `PORT` | no | Local dev server port (default `3000`) |
    | `SESSION_SECRET` | yes | Any long random string — signs the session cookie |
    | `POSTGRES_URL` | yes | Postgres connection string |
-   | `ADMIN_SIGNUP_CODE` | no | Secret code required to self-register as Admin via `/register`. Leave blank to disable admin self-registration (Cashier registration still works; admins are then created from the Admin ▸ Users page) |
 
    To point `POSTGRES_URL` at a Vercel Postgres database before it's deployed, create the database in the Vercel dashboard first (see [Deployment](#deployment-to-vercel) below), then run:
 
@@ -124,7 +125,6 @@ vercel.json               # Vercel routing + function config
 4. **Set the remaining environment variables**
    In your project's **Settings ▸ Environment Variables**, add:
    - `SESSION_SECRET` — a long random string (e.g. `openssl rand -hex 32`)
-   - `ADMIN_SIGNUP_CODE` *(optional)* — a secret code for admin self-registration; share it out-of-band with whoever should be able to register as an admin, never in the app itself
 
    Redeploy after adding/changing env vars so they take effect.
 
@@ -137,9 +137,9 @@ vercel.json               # Vercel routing + function config
    node -r dotenv/config src/db/seed.js dotenv_config_path=.env.production.local
    ```
 
-   Alternatively, skip seeding and just use `/register` to create your first Admin account (requires `ADMIN_SIGNUP_CODE` to be set).
+   Seeding is how the first Admin account gets created: access requests need an existing admin to approve them.
 
-6. **Visit your deployment** — Vercel gives you a `*.vercel.app` URL (or your custom domain). Log in or register, and you're running.
+6. **Visit your deployment** — Vercel gives you a `*.vercel.app` URL (or your custom domain). Sign in, and you're running.
 
 ### Notes on the serverless setup
 

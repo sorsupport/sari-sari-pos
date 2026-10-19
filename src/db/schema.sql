@@ -63,3 +63,34 @@ CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_product_id ON sale_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_reports_created_at ON inventory_reports(created_at);
 CREATE INDEX IF NOT EXISTS idx_products_active ON products(active);
+
+-- Accounts created or reset by an admin get a temporary password and must
+-- choose their own on the next sign-in.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS contact TEXT;
+
+-- "Request access" submissions, waiting for an admin to approve or reject.
+CREATE TABLE IF NOT EXISTS access_requests (
+  id SERIAL PRIMARY KEY,
+  full_name TEXT NOT NULL,
+  username TEXT NOT NULL,
+  contact TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'sales_rep')),
+  note TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ
+);
+
+-- "Forgot password" submissions; an admin answers them with a temporary password.
+CREATE TABLE IF NOT EXISTS password_reset_requests (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  message TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'resolved', 'dismissed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_access_requests_status ON access_requests(status);
+CREATE INDEX IF NOT EXISTS idx_password_reset_requests_status ON password_reset_requests(status);
