@@ -145,3 +145,26 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_sales_user_id ON sales(user_id);
 CREATE INDEX IF NOT EXISTS idx_categories_parent_id ON categories(parent_id);
+
+-- The size and color choices offered in the product editor. Admins add and
+-- remove them; products keep their own sizes/colors even if an option is removed.
+CREATE TABLE IF NOT EXISTS product_attribute_options (
+  id SERIAL PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('size', 'color')),
+  value TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (kind, value)
+);
+
+-- One-time setup markers, so defaults are added once and stay deleted if removed.
+CREATE TABLE IF NOT EXISTS app_flags (name TEXT PRIMARY KEY);
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM app_flags WHERE name = 'attribute_options_seeded') THEN
+    INSERT INTO product_attribute_options (kind, value, position) VALUES
+      ('size', 'XS', 1), ('size', 'S', 2), ('size', 'M', 3), ('size', 'L', 4), ('size', 'XXL', 5),
+      ('color', '#111113', 1), ('color', '#c4c4c8', 2), ('color', '#e8e1d4', 3)
+    ON CONFLICT (kind, value) DO NOTHING;
+    INSERT INTO app_flags (name) VALUES ('attribute_options_seeded') ON CONFLICT DO NOTHING;
+  END IF;
+END $$;

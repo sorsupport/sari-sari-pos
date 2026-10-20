@@ -20,6 +20,8 @@ router.post('/products/:id(\\d+)/active', products.setProductActive);
 router.post('/products/:id(\\d+)/delete', products.deleteProduct);
 router.post('/products/:id(\\d+)', products.updateProduct);
 router.post('/categories', products.createCategory);
+router.post('/product-options', products.addOption);
+router.post('/product-options/delete', products.removeOption);
 
 router.get('/users', ctrl.listUsers);
 router.post('/users', ctrl.createUser);

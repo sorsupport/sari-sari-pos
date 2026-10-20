@@ -2,8 +2,9 @@ const { query, getClient } = require('../config/db');
 const { setFlash } = require('../middleware/flash');
 const { toCsv } = require('../utils/helpers');
 
-const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'OS', '28', '30', '32', '34'];
+const SIZE_PATTERN = /^[A-Z0-9][A-Z0-9 ./-]{0,7}$/;
 const COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+const MAX_OPTIONS = 40;
 const IMAGE_PATTERN = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/;
 const MAX_IMAGE_BYTES = 1.5 * 1024 * 1024;
 
@@ -30,6 +31,16 @@ function money(value) {
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
 }
 
+function normalizeSize(value) {
+  const s = String(value || '').trim().toUpperCase().replace(/\s+/g, ' ');
+  return SIZE_PATTERN.test(s) ? s : null;
+}
+
+function normalizeColor(value) {
+  const c = String(value || '').trim().toLowerCase();
+  return COLOR_PATTERN.test(c) ? c : null;
+}
+
 function wholeNumber(value, fallback) {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const n = Number(value);
@@ -42,8 +53,9 @@ function readProduct(body) {
     name: String(body.name || '').trim().slice(0, 120),
     barcode: String(body.barcode || '').trim().slice(0, 60) || null,
     category_id: /^\d+$/.test(String(body.category_id || '')) ? Number(body.category_id) : null,
-    sizes: SIZES.filter((s) => list(body.sizes).map((x) => String(x).toUpperCase()).includes(s)),
-    colors: [...new Set(list(body.colors).map((c) => String(c).toLowerCase()))].filter((c) => COLOR_PATTERN.test(c)).slice(0, 12),
+    // Form posts send each size separately, so only CSV text needs splitting.
+    sizes: [...new Set((Array.isArray(body.sizes) ? body.sizes : list(body.sizes)).map(normalizeSize).filter(Boolean))].slice(0, 20),
+    colors: [...new Set(list(body.colors).map(normalizeColor).filter(Boolean))].slice(0, 12),
     cost_price: money(body.cost_price === '' || body.cost_price === undefined ? 0 : body.cost_price),
     selling_price: money(body.selling_price),
     stock_quantity: wholeNumber(body.stock_quantity, 0),
@@ -83,7 +95,7 @@ async function saveImage(client, productId, body) {
 
 async function listProducts(req, res, next) {
   try {
-    const [products, categories] = await Promise.all([
+    const [products, categories, options] = await Promise.all([
       query(
         `SELECT p.id, p.name, p.barcode, p.category_id, p.cost_price, p.selling_price, p.stock_quantity,
                 p.reorder_level, p.active, p.sizes, p.colors,
@@ -96,6 +108,7 @@ async function listProducts(req, res, next) {
          ORDER BY p.active DESC, p.name ASC`
       ).then((r) => r.rows),
       query('SELECT id, name, parent_id FROM categories ORDER BY name').then((r) => r.rows),
+      query('SELECT kind, value FROM product_attribute_options ORDER BY position, id').then((r) => r.rows),
     ]);
 
     const groups = categories
@@ -113,7 +126,8 @@ async function listProducts(req, res, next) {
       })),
       groups,
       types,
-      sizes: SIZES,
+      sizeOptions: options.filter((o) => o.kind === 'size').map((o) => o.value),
+      colorOptions: options.filter((o) => o.kind === 'color').map((o) => o.value),
       unitsOnHand: products.filter((p) => p.active).reduce((sum, p) => sum + p.stock_quantity, 0),
     });
   } catch (err) {
@@ -241,6 +255,55 @@ async function createCategory(req, res, next) {
     setFlash(req, 'success', `Category "${name}" added`);
     if (wantsJson(req)) return res.json({ ok: true, id: rows[0].id });
     res.redirect('/admin/products');
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---- Size & color options offered in the editor ----
+
+function readOption(body) {
+  const kind = body.kind === 'color' ? 'color' : body.kind === 'size' ? 'size' : null;
+  const value = kind === 'color' ? normalizeColor(body.value) : kind === 'size' ? normalizeSize(body.value) : null;
+  return { kind, value };
+}
+
+async function addOption(req, res, next) {
+  const { kind, value } = readOption(req.body);
+  try {
+    if (!kind) return res.status(422).json({ error: 'Unknown option type.' });
+    if (!value) {
+      return res.status(422).json({
+        error: kind === 'size' ? 'Use up to 8 letters or numbers for a size.' : 'Pick a valid color.',
+      });
+    }
+    const { rows } = await query(
+      `INSERT INTO product_attribute_options (kind, value, position)
+       SELECT $1::text, $2::text, COALESCE(MAX(position), 0) + 1 FROM product_attribute_options WHERE kind = $1
+       ON CONFLICT (kind, value) DO NOTHING
+       RETURNING value`,
+      [kind, value]
+    );
+    if (rows[0]) {
+      const { rows: count } = await query('SELECT COUNT(*)::int AS n FROM product_attribute_options WHERE kind = $1', [kind]);
+      if (count[0].n > MAX_OPTIONS) {
+        await query('DELETE FROM product_attribute_options WHERE kind = $1 AND value = $2', [kind, value]);
+        return res.status(422).json({ error: `Keep it to ${MAX_OPTIONS} ${kind}s or fewer.` });
+      }
+    }
+    res.json({ ok: true, value });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Removing an option only takes it off the list; products that already use it keep it.
+async function removeOption(req, res, next) {
+  const { kind, value } = readOption(req.body);
+  try {
+    if (!kind || !value) return res.status(422).json({ error: 'Unknown option.' });
+    await query('DELETE FROM product_attribute_options WHERE kind = $1 AND value = $2', [kind, value]);
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
@@ -405,5 +468,7 @@ module.exports = {
   createCategory,
   importTemplate,
   importProducts,
+  addOption,
+  removeOption,
   parseCsv,
 };

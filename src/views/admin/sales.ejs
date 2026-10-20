@@ -148,8 +148,10 @@
   <div class="modal-backdrop" id="refundModal" hidden>
     <form method="POST" action="/admin/sales/<%= selected.id %>/refund" class="modal" role="dialog" aria-modal="true" aria-labelledby="refundTitle">
       <input type="hidden" name="back" value="<%= currentUrl %>" />
-      <div class="modal-icon"><%- icon('refund', 20) %></div>
-      <h2 id="refundTitle">Refund this sale?</h2>
+      <div class="modal-head">
+        <div class="modal-icon"><%- icon('refund', 20) %></div>
+        <h2 id="refundTitle">Refund this sale?</h2>
+      </div>
       <p>Receipt <strong><%= selected.receipt_no %></strong> for <strong><%= peso(selected.total_amount) %></strong> will be marked refunded and its items returned to stock. Hand the customer their money back separately.</p>
       <div class="modal-actions">
         <button type="button" class="abtn" data-close>Cancel</button>

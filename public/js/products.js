@@ -1,7 +1,10 @@
 (function () {
   const products = JSON.parse(document.getElementById('productData').textContent);
   const byId = new Map(products.map((p) => [String(p.id), p]));
-  const PRESET_COLORS = ['#111113', '#c4c4c8', '#e8e1d4'];
+  const editorData = JSON.parse(document.getElementById('editorData').textContent);
+  const categories = editorData.categories; // groups, each with its sub-categories
+  let sizeOptions = editorData.sizes; // store-wide lists, edited with + and ×
+  let colorOptions = editorData.colors;
 
   const form = document.getElementById('productForm');
   const title = document.getElementById('editorTitle');
@@ -18,9 +21,13 @@
   const photoInput = document.getElementById('photoInput');
   const imageData = document.getElementById('imageData');
   const removeImage = document.getElementById('removeImage');
+  const categorySelect = document.getElementById('pCategory');
+  const subcategorySelect = document.getElementById('pSubcategory');
+  const sizeBox = document.getElementById('sizeOptions');
+  const addSizeBtn = document.getElementById('addSizeBtn');
+  const addSizeInput = document.getElementById('addSizeInput');
   const fields = {
     name: document.getElementById('pName'),
-    category_id: document.getElementById('pType'),
     barcode: document.getElementById('pSku'),
     cost_price: document.getElementById('pCost'),
     selling_price: document.getElementById('pPrice'),
@@ -29,8 +36,12 @@
   };
 
   let editing = null; // product being edited, or null for "new"
+  let selectedSizes = [];
   let selectedColors = [];
-  let knownColors = [...PRESET_COLORS];
+  // What the editor shows: the store-wide options plus any the product
+  // already uses that aren't on the list (e.g. from a CSV import).
+  let shownSizes = [];
+  let shownColors = [];
 
   // ---- Small helpers ----
 
@@ -128,12 +139,142 @@
     });
   });
 
-  // ---- Colors ----
+  // ---- Category / sub-category ----
+
+  function fillSubcategories(groupId, selectedId) {
+    const group = categories.find((g) => String(g.id) === String(groupId));
+    const children = group ? group.children : [];
+    subcategorySelect.innerHTML = '';
+    const none = new Option('None', '');
+    subcategorySelect.add(none);
+    children.forEach((c) => subcategorySelect.add(new Option(c.name, c.id)));
+    subcategorySelect.disabled = !children.length;
+    subcategorySelect.value = selectedId ? String(selectedId) : '';
+  }
+
+  // A product's category_id is either a group or one of its sub-categories.
+  function setCategory(categoryId) {
+    const id = String(categoryId || '');
+    const asGroup = categories.find((g) => String(g.id) === id);
+    const parent = categories.find((g) => g.children.some((c) => String(c.id) === id));
+    categorySelect.value = asGroup ? id : parent ? String(parent.id) : '';
+    fillSubcategories(categorySelect.value, parent ? id : '');
+  }
+
+  categorySelect.addEventListener('change', () => fillSubcategories(categorySelect.value, ''));
+
+  // ---- Sizes & colors ----
+
+  async function removeOption(kind, value) {
+    try {
+      await postJson('/admin/product-options/delete', { kind, value });
+      if (kind === 'size') sizeOptions = sizeOptions.filter((s) => s !== value);
+      else colorOptions = colorOptions.filter((c) => c !== value);
+      return true;
+    } catch (err) {
+      toast(err.message, 'error');
+      return false;
+    }
+  }
+
+  async function addOption(kind, value) {
+    try {
+      const { value: saved } = await postJson('/admin/product-options', { kind, value });
+      if (kind === 'size' && !sizeOptions.includes(saved)) sizeOptions.push(saved);
+      if (kind === 'color' && !colorOptions.includes(saved)) colorOptions.push(saved);
+      return saved;
+    } catch (err) {
+      toast(err.message, 'error');
+      return null;
+    }
+  }
+
+  function removeButton(label, onClick) {
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'opt-remove';
+    x.setAttribute('aria-label', label);
+    x.title = label;
+    x.innerHTML =
+      '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+    x.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    });
+    return x;
+  }
+
+  function renderSizes() {
+    sizeBox.querySelectorAll('.opt').forEach((el) => el.remove());
+    shownSizes.forEach((size) => {
+      const wrap = document.createElement('span');
+      wrap.className = 'opt';
+      const label = document.createElement('label');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = size;
+      cb.checked = selectedSizes.includes(size);
+      cb.addEventListener('change', () => {
+        selectedSizes = cb.checked ? [...selectedSizes, size] : selectedSizes.filter((s) => s !== size);
+      });
+      const text = document.createElement('span');
+      text.textContent = size;
+      label.append(cb, text);
+      wrap.append(
+        label,
+        removeButton(`Remove size ${size}`, async () => {
+          if (!(await removeOption('size', size))) return;
+          shownSizes = shownSizes.filter((s) => s !== size);
+          selectedSizes = selectedSizes.filter((s) => s !== size);
+          renderSizes();
+          addSizeBtn.focus();
+        })
+      );
+      sizeBox.insertBefore(wrap, addSizeBtn);
+    });
+  }
+
+  function hideSizeInput() {
+    addSizeInput.value = '';
+    addSizeInput.hidden = true;
+    addSizeBtn.hidden = false;
+  }
+
+  addSizeBtn.addEventListener('click', () => {
+    addSizeBtn.hidden = true;
+    addSizeInput.hidden = false;
+    addSizeInput.focus();
+  });
+  addSizeInput.addEventListener('keydown', async (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      hideSizeInput();
+      addSizeBtn.focus();
+      return;
+    }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const value = addSizeInput.value.trim();
+    if (!value) return hideSizeInput();
+    const saved = await addOption('size', value);
+    if (!saved) return;
+    if (!shownSizes.includes(saved)) shownSizes.push(saved);
+    if (!selectedSizes.includes(saved)) selectedSizes.push(saved);
+    renderSizes();
+    addSizeInput.value = '';
+    addSizeInput.focus(); // stay open to add another
+  });
+  addSizeInput.addEventListener('blur', () => {
+    if (!addSizeInput.value.trim()) hideSizeInput();
+  });
 
   function renderColors() {
-    colorPicker.querySelectorAll('.color-option').forEach((b) => b.remove());
-    const addLabel = colorPicker.querySelector('.color-add');
-    knownColors.forEach((hex) => {
+    colorPicker.querySelectorAll('.opt').forEach((el) => el.remove());
+    const addLabel = colorPicker.querySelector('.opt-add');
+    shownColors.forEach((hex) => {
+      const wrap = document.createElement('span');
+      wrap.className = 'opt';
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'color-option';
@@ -145,16 +286,36 @@
         selectedColors = selectedColors.includes(hex) ? selectedColors.filter((c) => c !== hex) : [...selectedColors, hex];
         btn.setAttribute('aria-pressed', selectedColors.includes(hex) ? 'true' : 'false');
       });
-      colorPicker.insertBefore(btn, addLabel);
+      wrap.append(
+        btn,
+        removeButton(`Remove color ${hex}`, async () => {
+          if (!(await removeOption('color', hex))) return;
+          shownColors = shownColors.filter((c) => c !== hex);
+          selectedColors = selectedColors.filter((c) => c !== hex);
+          renderColors();
+        })
+      );
+      colorPicker.insertBefore(wrap, addLabel);
     });
   }
 
-  colorAdd.addEventListener('change', () => {
-    const hex = colorAdd.value.toLowerCase();
-    if (!knownColors.includes(hex)) knownColors.push(hex);
-    if (!selectedColors.includes(hex)) selectedColors.push(hex);
+  colorAdd.addEventListener('change', async () => {
+    const saved = await addOption('color', colorAdd.value);
+    if (!saved) return;
+    if (!shownColors.includes(saved)) shownColors.push(saved);
+    if (!selectedColors.includes(saved)) selectedColors.push(saved);
     renderColors();
   });
+
+  function resetOptions(product) {
+    selectedSizes = product ? [...product.sizes] : [];
+    selectedColors = product ? [...product.colors] : [];
+    shownSizes = [...sizeOptions, ...selectedSizes.filter((s) => !sizeOptions.includes(s))];
+    shownColors = [...colorOptions, ...selectedColors.filter((c) => !colorOptions.includes(c))];
+    hideSizeInput();
+    renderSizes();
+    renderColors();
+  }
 
   // ---- Photo ----
 
@@ -279,11 +440,10 @@
     deleteBtn.hidden = true;
     setSaveLabel('Add product', 'plus');
     fields.reorder_level.value = 5;
-    selectedColors = [];
-    knownColors = [...PRESET_COLORS];
+    setCategory('');
+    resetOptions(null);
     imageData.value = '';
     removeImage.value = '';
-    renderColors();
     showPhoto(null);
     clearErrors();
     rows.forEach((r) => r.classList.remove('is-selected'));
@@ -303,14 +463,10 @@
     Object.entries(fields).forEach(([key, el]) => {
       el.value = product[key] === null || product[key] === undefined ? '' : product[key];
     });
-    form.querySelectorAll('input[name="sizes"]').forEach((cb) => {
-      cb.checked = product.sizes.includes(cb.value);
-    });
-    selectedColors = [...product.colors];
-    knownColors = [...new Set([...product.colors, ...PRESET_COLORS])];
+    setCategory(product.category_id);
+    resetOptions(product);
     imageData.value = '';
     removeImage.value = '';
-    renderColors();
     showPhoto(product.image_url);
     clearErrors();
     rows.forEach((r) => r.classList.toggle('is-selected', r.dataset.id === String(product.id)));
@@ -343,8 +499,9 @@
     if (fields.selling_price.value === '') return showError('Enter a selling price.', 'selling_price');
 
     const body = Object.fromEntries(Object.entries(fields).map(([k, el]) => [k, el.value]));
-    body.sizes = Array.from(form.querySelectorAll('input[name="sizes"]:checked')).map((cb) => cb.value);
-    body.colors = selectedColors;
+    body.category_id = subcategorySelect.value || categorySelect.value;
+    body.sizes = shownSizes.filter((s) => selectedSizes.includes(s)); // keep the on-screen order
+    body.colors = shownColors.filter((c) => selectedColors.includes(c));
     body.image_data = imageData.value;
     body.remove_image = removeImage.value;
 
