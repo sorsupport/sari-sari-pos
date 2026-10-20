@@ -1,118 +1,240 @@
 <%- include('../partials/head') %>
 <%- include('../partials/nav') %>
-<main class="container">
-  <h1>Dashboard</h1>
-
-  <div class="stat-row">
-    <div class="stat-card">
-      <div class="stat-label">Today</div>
-      <div class="stat-value"><%= peso(todayTotal.total) %></div>
-      <div class="stat-sub"><%= todayTotal.count %> transaction<%= todayTotal.count === 1 ? '' : 's' %></div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Last 7 Days</div>
-      <div class="stat-value"><%= peso(weekTotal.total) %></div>
-      <div class="stat-sub"><%= weekTotal.count %> transaction<%= weekTotal.count === 1 ? '' : 's' %></div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">This Month</div>
-      <div class="stat-value"><%= peso(monthTotal.total) %></div>
-      <div class="stat-sub"><%= monthTotal.count %> transaction<%= monthTotal.count === 1 ? '' : 's' %></div>
-    </div>
-  </div>
-
-  <div class="grid-2">
-    <div class="card">
-      <h2>Sales Trend (7 days)</h2>
-      <canvas id="salesTrendChart" height="220"></canvas>
-    </div>
-
-    <div class="card">
-      <h2>Top Products (30 days)</h2>
-      <% if (topProducts.length === 0) { %>
-        <p class="muted">No sales recorded yet.</p>
-      <% } else { %>
-        <table class="table">
-          <thead><tr><th>Product</th><th>Units</th><th>Revenue</th></tr></thead>
-          <tbody>
-            <% topProducts.forEach(p => { %>
-              <tr>
-                <td><%= p.product_name %></td>
-                <td><%= p.units_sold %></td>
-                <td><%= peso(p.revenue) %></td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
-      <% } %>
+<%
+  const firstName = (currentUser.fullName || '').trim().split(/\s+/)[0];
+  const delta = (k) => {
+    const c = kpis[k].change;
+    if (c === null) return '<span>No sales in the previous period</span>';
+    const up = c >= 0;
+    return `<b class="${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Math.abs(c).toFixed(1)}%</b> ${range.compare}`;
+  };
+  const maxShare = Math.max(1, ...categories.map((c) => c.share));
+%>
+<main class="page">
+  <div class="page-head">
+    <h1 class="page-title" id="greeting" data-name="<%= firstName %>">Welcome back, <%= firstName %></h1>
+    <div class="page-actions">
+      <nav class="seg" aria-label="Date range">
+        <% [['today', 'Today'], ['7d', '7 days'], ['30d', '30 days']].forEach(([key, label]) => { %>
+          <a href="/admin/dashboard?range=<%= key %>" class="<%= rangeKey === key ? 'is-active' : '' %>"<%- rangeKey === key ? ' aria-current="true"' : '' %>><%= label %></a>
+        <% }) %>
+      </nav>
+      <a class="abtn" href="/admin/sales/export.csv?from=<%= from %>&amp;to=<%= to %>"><%- icon('download', 16) %>Export</a>
     </div>
   </div>
 
-  <div class="grid-2">
-    <div class="card">
-      <h2>Low Stock Alerts</h2>
-      <% if (lowStock.length === 0) { %>
-        <p class="muted">All products are sufficiently stocked.</p>
+  <section class="kpis">
+    <div class="panel kpi kpi-dark">
+      <p class="kpi-label">Revenue · <%= range.label %></p>
+      <p class="kpi-value"><%= h.pesoWhole(kpis.revenue.value) %></p>
+      <p class="kpi-delta"><%- delta('revenue') %></p>
+    </div>
+    <div class="panel kpi">
+      <p class="kpi-label">Orders</p>
+      <p class="kpi-value"><%= kpis.orders.value.toLocaleString('en-US') %></p>
+      <p class="kpi-delta"><%- delta('orders') %></p>
+    </div>
+    <div class="panel kpi">
+      <p class="kpi-label">Avg. order value</p>
+      <p class="kpi-value"><%= h.pesoWhole(kpis.aov.value) %></p>
+      <p class="kpi-delta"><%- delta('aov') %></p>
+    </div>
+    <div class="panel kpi">
+      <p class="kpi-label">Items sold</p>
+      <p class="kpi-value"><%= kpis.items.value.toLocaleString('en-US') %></p>
+      <p class="kpi-delta"><%- delta('items') %></p>
+    </div>
+  </section>
+
+  <section class="dash-row dash-row-2">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2 class="panel-title">Sales trend</h2>
+          <p class="panel-sub"><%= rangeKey === 'today' ? 'Revenue by hour, today' : `Daily revenue, last ${range.days} days` %></p>
+        </div>
+        <% if (peak) { %><span class="pill pill-dark">Peak: <%= peak.long %> ₱<%= h.compact(peak.total) %></span><% } %>
+      </div>
+      <div class="chart-box"><canvas id="trendChart" aria-label="Sales trend chart" role="img"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2 class="panel-title">Sales by category</h2>
+          <p class="panel-sub">Share of revenue, 30 days</p>
+        </div>
+      </div>
+      <% if (!categories.length) { %>
+        <p class="empty">No sales in the last 30 days.</p>
       <% } else { %>
-        <table class="table">
-          <thead><tr><th>Product</th><th>Stock</th><th>Reorder Level</th></tr></thead>
-          <tbody>
-            <% lowStock.forEach(p => { %>
-              <tr class="<%= p.stock_quantity === 0 ? 'row-danger' : 'row-warning' %>">
-                <td><%= p.name %></td>
-                <td><%= p.stock_quantity %> <%= p.unit %></td>
-                <td><%= p.reorder_level %></td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
+        <div class="cat-list">
+          <% categories.forEach(c => { %>
+            <div class="cat-row">
+              <span><%= c.name %></span>
+              <span class="cat-track"><span class="cat-fill" style="width: <%= (c.share / maxShare * 100).toFixed(1) %>%"></span></span>
+              <span class="cat-share"><%= Math.round(c.share) %>%</span>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+    </div>
+  </section>
+
+  <section class="dash-row dash-row-3">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2 class="panel-title">Top products</h2>
+          <p class="panel-sub">Last 30 days</p>
+        </div>
+      </div>
+      <% if (!topProducts.length) { %>
+        <p class="empty">No sales in the last 30 days.</p>
+      <% } else { %>
+        <ul class="item-list">
+          <% topProducts.forEach(p => { %>
+            <li>
+              <span class="thumb">
+                <% if (p.image_updated_at) { %><img src="/admin/products/<%= p.product_id %>/image?v=<%= new Date(p.image_updated_at).getTime() %>" alt="" loading="lazy" /><% } else { %><%- icon(productIconName(p.name, p.category), 20) %><% } %>
+              </span>
+              <span class="item-main"><span class="strong"><%= p.name %></span><span class="sub"><%= p.units %> sold</span></span>
+              <span class="item-end"><%= peso(p.revenue) %></span>
+            </li>
+          <% }) %>
+        </ul>
       <% } %>
     </div>
 
-    <div class="card">
-      <h2>Recent Transactions</h2>
-      <% if (recentSales.length === 0) { %>
-        <p class="muted">No transactions yet.</p>
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2 class="panel-title">Low stock alerts</h2>
+          <p class="panel-sub">At or below reorder level</p>
+        </div>
+        <% if (lowStock.length) { %><span class="pill pill-bad pill-dot"><%= lowStock.length %></span><% } %>
+      </div>
+      <% if (!lowStock.length) { %>
+        <p class="empty">Everything is above its reorder level.</p>
       <% } else { %>
-        <table class="table">
-          <thead><tr><th>Receipt</th><th>Cashier</th><th>Total</th><th>When</th></tr></thead>
-          <tbody>
-            <% recentSales.forEach(s => { %>
-              <tr>
-                <td><a href="/admin/sales/<%= s.id %>"><%= s.receipt_no %></a></td>
-                <td><%= s.cashier %></td>
-                <td><%= peso(s.total_amount) %></td>
-                <td><%= s.created_at %></td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
+        <ul class="item-list">
+          <% lowStock.slice(0, 5).forEach(p => {
+               const urgent = p.stock_quantity === 0 || p.stock_quantity <= p.reorder_level / 2; %>
+            <li>
+              <span class="item-main"><span class="strong"><%= p.name %></span><span class="sub"><%= p.category || 'Uncategorized' %></span></span>
+              <span class="pill pill-dot <%= urgent ? 'pill-bad' : 'pill-warn' %>"><%= p.stock_quantity === 0 ? 'Out of stock' : `${p.stock_quantity} left` %></span>
+              <span class="item-min">min <%= p.reorder_level %></span>
+            </li>
+          <% }) %>
+        </ul>
+        <% if (lowStock.length > 5) { %><p class="panel-sub"><a href="/admin/products" class="strong">+<%= lowStock.length - 5 %> more in Products</a></p><% } %>
       <% } %>
     </div>
-  </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2 class="panel-title">Recent transactions</h2>
+          <p class="panel-sub">Today</p>
+        </div>
+        <a href="/admin/sales" class="abtn abtn-sm">View all</a>
+      </div>
+      <% if (!recentSales.length) { %>
+        <p class="empty">No sales yet today.</p>
+      <% } else { %>
+        <div class="table-wrap">
+          <table class="atable">
+            <thead><tr><th>Receipt</th><th>Time</th><th>Paid via</th><th class="num">Total</th></tr></thead>
+            <tbody>
+              <% recentSales.forEach(s => { %>
+                <tr class="is-clickable" data-href="/admin/sales?selected=<%= s.id %>">
+                  <td class="mono"><a class="row-link" href="/admin/sales?selected=<%= s.id %>"><%= s.receipt_no %></a></td>
+                  <td><%= h.timeOnly(s.created_at) %></td>
+                  <td><span class="pill"><%= h.PAYMENT_LABELS[s.payment_method] %></span></td>
+                  <td class="num strong"><%= s.status === 'refunded' ? 'Refunded' : peso(s.total_amount) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+  </section>
 </main>
 
 <script src="/js/vendor/chart.umd.min.js"></script>
 <script>
-  const trendData = <%- JSON.stringify(trendData) %>;
-  const ctx = document.getElementById('salesTrendChart');
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: trendData.map(d => d.day.slice(5)),
-      datasets: [{
-        label: 'Sales (₱)',
-        data: trendData.map(d => d.total),
-        borderColor: '#2b6cb0',
-        backgroundColor: 'rgba(43, 108, 176, 0.15)',
-        tension: 0.3,
-        fill: true,
-      }],
-    },
-    options: {
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } },
-    },
-  });
+  (function () {
+    // Greeting by the viewer's local time.
+    var g = document.getElementById('greeting');
+    var hour = new Date().getHours();
+    var part = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    g.textContent = part + (g.dataset.name ? ', ' + g.dataset.name : '');
+
+    var trend = <%- JSON.stringify(trend) %>;
+    var compact = function (n) { return n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(Math.round(n)); };
+    var last = trend.length - 1;
+    var ctx = document.getElementById('trendChart');
+
+    // Writes each bar's value above it when there's room.
+    var valueLabels = {
+      id: 'valueLabels',
+      afterDatasetsDraw: function (chart) {
+        if (trend.length > 14) return;
+        var c = chart.ctx;
+        c.save();
+        c.font = '500 11px Inter, sans-serif';
+        c.fillStyle = '#3f3f46';
+        c.textAlign = 'center';
+        chart.getDatasetMeta(0).data.forEach(function (bar, i) {
+          if (trend[i].total > 0) c.fillText(compact(trend[i].total), bar.x, bar.y - 7);
+        });
+        c.restore();
+      },
+    };
+
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: trend.map(function (t) { return t.label; }),
+        datasets: [{
+          data: trend.map(function (t) { return t.total; }),
+          backgroundColor: function (context) {
+            if (context.dataIndex === last) return '#111113';
+            var area = context.chart.chartArea;
+            if (!area) return '#c4c4c8';
+            var grad = context.chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+            grad.addColorStop(0, '#b8b8bd');
+            grad.addColorStop(1, '#e4e4e7');
+            return grad;
+          },
+          borderRadius: 6,
+          maxBarThickness: 48,
+        }],
+      },
+      options: {
+        maintainAspectRatio: false,
+        layout: { padding: { top: 22 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: function (item) { return '₱' + item.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2 }); } } },
+        },
+        scales: {
+          x: { grid: { display: false }, border: { display: false }, ticks: { color: '#52525b', font: { size: 11 }, autoSkip: true, maxRotation: 0 } },
+          y: {
+            beginAtZero: true,
+            border: { display: false },
+            grid: { color: '#ececee' },
+            ticks: { color: '#a1a1aa', font: { size: 10 }, maxTicksLimit: 5, callback: function (v) { return compact(v); } },
+          },
+        },
+      },
+      plugins: [valueLabels],
+    });
+
+    document.querySelectorAll('tr[data-href]').forEach(function (tr) {
+      tr.addEventListener('click', function (e) { if (!e.target.closest('a')) location.href = tr.dataset.href; });
+    });
+  })();
 </script>
 <%- include('../partials/foot') %>

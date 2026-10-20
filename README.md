@@ -5,14 +5,14 @@ A point-of-sale system for a small sari-sari store, with separate **Admin** and 
 ## Features
 
 **Admin**
-- Dashboard with sales analytics: today / 7-day / monthly totals, a 7-day sales trend chart, top-selling products, low-stock alerts, and recent transactions
-- Product & category management (add, edit, deactivate)
+- Dashboard: revenue, orders, average order value and items sold for today / 7 days / 30 days (compared with the previous period), a sales trend chart, sales by category, top products, low-stock alerts, and today's transactions
+- Products: search and filter by category group and type, sizes and colors as tags, product photos, an active toggle, edit in a side panel, delete (past sales are kept), and CSV import (download the template from the Import dialog)
 - User management (create/deactivate accounts, assign roles)
-- Full sales transaction history with date filtering and receipt detail
+- Sales: filter by date, cashier, payment method or receipt/product search; gross, refunds, net and payment split; receipt preview with print; refunds that return items to stock; CSV export
 - Visibility into every inventory report submitted by cashiers
 
 **Sales Representative (Cashier)**
-- POS screen: search/scan products, build a cart, accept cash payment, auto-compute change, print a receipt
+- POS screen: search/scan products, build a cart, take Cash (with change), GCash or Card (with a reference no.), print a receipt
 - Inventory screen: view current stock and submit reports (restock, damaged, lost, correction)
 
 **Accounts**
@@ -74,6 +74,7 @@ vercel.json               # Vercel routing + function config
    | `PORT` | no | Local dev server port (default `3000`) |
    | `SESSION_SECRET` | yes | Any long random string — signs the session cookie |
    | `POSTGRES_URL` | yes | Postgres connection string |
+   | `STORE_TIMEZONE` | no | Timezone used to group sales by day and show times (default `Asia/Manila`) |
 
    To point `POSTGRES_URL` at a Vercel Postgres database before it's deployed, create the database in the Vercel dashboard first (see [Deployment](#deployment-to-vercel) below), then run:
 

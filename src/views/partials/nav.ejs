@@ -1,16 +1,90 @@
+<% if (currentUser && currentUser.role === 'admin' && !currentUser.mustChangePassword) { %>
+<%
+  const path = typeof currentPath !== 'undefined' ? currentPath : '';
+  const links = [
+    { href: '/admin/dashboard', label: 'Dashboard', icon: 'dashboard' },
+    { href: '/admin/products', label: 'Products', icon: 'tag' },
+    { href: '/admin/sales', label: 'Sales', icon: 'receipt' },
+    { href: '/admin/inventory-reports', label: 'Inventory Reports', icon: 'clipboard',
+      badge: typeof reportsToday !== 'undefined' ? reportsToday : 0, badgeTitle: 'Reports filed today' },
+    { href: '/admin/users', label: 'Users', icon: 'users',
+      badge: typeof pendingRequests !== 'undefined' ? pendingRequests : 0, badgeTitle: 'Requests waiting for review' },
+  ];
+%>
+<aside class="sidebar">
+  <a href="/admin/dashboard" class="sidebar-brand">
+    <img src="/Luminous%20Metallic%20Crescent%20Emblem.png" alt="" />
+    <span>
+      <span class="sidebar-wordmark">MOON</span>
+      <span class="sidebar-tagline">Clothing &amp; Accessories</span>
+    </span>
+  </a>
+  <nav class="sidebar-nav" aria-label="Main">
+    <% links.forEach(l => { const active = path === l.href || path.startsWith(l.href + '/'); %>
+      <a href="<%= l.href %>" class="sidebar-link<%= active ? ' is-active' : '' %>"<%- active ? ' aria-current="page"' : '' %>>
+        <%- icon(l.icon, 18) %>
+        <span><%= l.label %></span>
+        <% if (l.badge) { %><span class="sidebar-badge" title="<%= l.badgeTitle %>"><%= l.badge %></span><% } %>
+      </a>
+    <% }) %>
+  </nav>
+  <div class="sidebar-user">
+    <span class="avatar"><%= h.initials(currentUser.fullName) %></span>
+    <span class="sidebar-user-text">
+      <strong><%= currentUser.fullName %></strong>
+      <span>Administrator</span>
+    </span>
+    <form method="POST" action="/logout">
+      <button type="submit" class="icon-button" title="Sign out" aria-label="Sign out"><%- icon('logout', 18) %></button>
+    </form>
+  </div>
+</aside>
+<div class="toast-stack" id="toastStack" aria-live="polite">
+  <% [['success', 'check'], ['deleted', 'trash'], ['notice', 'check'], ['error', 'x']].forEach(([type, ic]) => { if (flash && flash[type]) { %>
+    <div class="toast toast-<%= type %>" role="<%= type === 'error' ? 'alert' : 'status' %>">
+      <%- icon(ic, 16) %>
+      <span><%= flash[type] %></span>
+      <button type="button" class="toast-close" aria-label="Dismiss"><%- icon('x', 14) %></button>
+    </div>
+  <% } }) %>
+</div>
+<script>
+  // Toasts: success fades on its own; errors and notices (e.g. temporary
+  // passwords) stay until dismissed.
+  window.showToast = function (message, type) {
+    type = type || 'success';
+    var el = document.createElement('div');
+    el.className = 'toast toast-' + type;
+    el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    var text = document.createElement('span');
+    text.textContent = message;
+    el.innerHTML = <%- JSON.stringify(icon('check', 16)) %>;
+    if (type === 'error') el.innerHTML = <%- JSON.stringify(icon('x', 16)) %>;
+    if (type === 'deleted') el.innerHTML = <%- JSON.stringify(icon('trash', 16)) %>;
+    el.appendChild(text);
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'toast-close';
+    close.setAttribute('aria-label', 'Dismiss');
+    close.innerHTML = <%- JSON.stringify(icon('x', 14)) %>;
+    el.appendChild(close);
+    document.getElementById('toastStack').appendChild(el);
+    armToast(el);
+  };
+  function armToast(el) {
+    el.querySelector('.toast-close').addEventListener('click', function () { el.remove(); });
+    if (el.classList.contains('toast-success') || el.classList.contains('toast-deleted')) setTimeout(function () { el.classList.add('is-leaving'); setTimeout(function () { el.remove(); }, 300); }, 4500);
+  }
+  document.querySelectorAll('#toastStack .toast').forEach(armToast);
+</script>
+<% } else { %>
 <header class="topbar">
   <div class="topbar-brand">
     <img src="/Luminous%20Metallic%20Crescent%20Emblem.png" alt="MOON crescent emblem" />
     <span>MOON</span>
   </div>
   <nav class="topbar-nav">
-    <% if (currentUser && currentUser.role === 'admin') { %>
-      <a href="/admin/dashboard">Dashboard</a>
-      <a href="/admin/products">Products</a>
-      <a href="/admin/sales">Sales</a>
-      <a href="/admin/inventory-reports">Inventory Reports</a>
-      <a href="/admin/users">Users<% if (typeof pendingRequests !== 'undefined' && pendingRequests) { %> <span class="nav-badge" title="Requests waiting for review"><%= pendingRequests %></span><% } %></a>
-    <% } else if (currentUser && currentUser.role === 'sales_rep') { %>
+    <% if (currentUser && currentUser.role === 'sales_rep') { %>
       <a href="/pos">Point of Sale</a>
       <a href="/pos/inventory">Inventory</a>
     <% } %>
@@ -25,4 +99,6 @@
   </div>
 </header>
 <% if (flash && flash.success) { %><div class="alert alert-success"><%= flash.success %></div><% } %>
+<% if (flash && flash.notice) { %><div class="alert alert-success"><%= flash.notice %></div><% } %>
 <% if (flash && flash.error) { %><div class="alert alert-error"><%= flash.error %></div><% } %>
+<% } %>

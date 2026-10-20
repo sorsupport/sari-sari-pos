@@ -9,6 +9,7 @@ const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const posRoutes = require('./routes/pos');
 const helpers = require('./utils/helpers');
+const icons = require('./utils/icons');
 
 const app = express();
 
@@ -16,8 +17,9 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.set('trust proxy', 1); // behind Vercel's proxy, so req.secure reflects the original https request
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+// Raised from the 100kb default: product photos and CSV imports are posted inline.
+app.use(express.urlencoded({ extended: true, limit: '4mb' }));
+app.use(express.json({ limit: '4mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use(
@@ -38,7 +40,14 @@ app.use((req, res, next) => {
 });
 
 app.use(flash);
+app.use((req, res, next) => {
+  res.locals.currentPath = req.path;
+  next();
+});
 app.locals.peso = helpers.peso;
+app.locals.h = helpers;
+app.locals.icon = icons.icon;
+app.locals.productIconName = icons.productIconName;
 
 app.get('/', (req, res) => {
   if (!req.session.user) return res.redirect('/login');

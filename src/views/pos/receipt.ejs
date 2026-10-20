@@ -19,6 +19,7 @@
       </tbody>
       <tfoot>
         <tr><td colspan="3">Total</td><td><%= peso(sale.total_amount) %></td></tr>
+        <tr><td colspan="3">Payment</td><td><%= h.PAYMENT_LABELS[sale.payment_method] || 'Cash' %><%= sale.payment_ref ? ' · Ref ' + sale.payment_ref : '' %></td></tr>
         <tr><td colspan="3">Amount Paid</td><td><%= peso(sale.amount_paid) %></td></tr>
         <tr><td colspan="3">Change</td><td><%= peso(sale.change_amount) %></td></tr>
       </tfoot>

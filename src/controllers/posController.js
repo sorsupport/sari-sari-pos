@@ -27,7 +27,9 @@ async function searchProducts(req, res, next) {
   }
 }
 
-async function checkout(items, amountPaid, userId) {
+const PAYMENT_METHODS = ['cash', 'gcash', 'card'];
+
+async function checkout(items, amountPaid, userId, paymentMethod = 'cash', paymentRef = null) {
   const client = await getClient();
   try {
     await client.query('BEGIN');
@@ -52,12 +54,16 @@ async function checkout(items, amountPaid, userId) {
     }
 
     if (resolvedItems.length === 0) throw new Error('Cart is empty.');
+    if (!PAYMENT_METHODS.includes(paymentMethod)) throw new Error('Choose a payment method.');
+    // GCash and card payments are for the exact total, so there's no change.
+    if (paymentMethod !== 'cash') amountPaid = total;
     if (amountPaid < total) throw new Error('Amount paid is less than the total.');
 
     const receiptNo = generateReceiptNo();
     const saleResult = await client.query(
-      'INSERT INTO sales (receipt_no, user_id, total_amount, amount_paid, change_amount) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [receiptNo, userId, total, amountPaid, amountPaid - total]
+      `INSERT INTO sales (receipt_no, user_id, total_amount, amount_paid, change_amount, payment_method, payment_ref)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [receiptNo, userId, total, amountPaid, amountPaid - total, paymentMethod, paymentMethod === 'cash' ? null : paymentRef]
     );
     const saleId = saleResult.rows[0].id;
 
@@ -86,7 +92,8 @@ async function postCheckout(req, res) {
   try {
     const items = JSON.parse(req.body.items || '[]');
     const amountPaid = Number(req.body.amount_paid);
-    const saleId = await checkout(items, amountPaid, req.session.user.id);
+    const paymentRef = (req.body.payment_ref || '').trim().slice(0, 60) || null;
+    const saleId = await checkout(items, amountPaid, req.session.user.id, req.body.payment_method || 'cash', paymentRef);
     res.redirect(`/pos/receipt/${saleId}`);
   } catch (err) {
     setFlash(req, 'error', err.message);
@@ -113,8 +120,8 @@ async function inventoryScreen(req, res, next) {
     const [products, myReports] = await Promise.all([
       query('SELECT * FROM products WHERE active = TRUE ORDER BY name').then((r) => r.rows),
       query(
-        `SELECT inventory_reports.*, products.name AS product_name
-         FROM inventory_reports JOIN products ON products.id = inventory_reports.product_id
+        `SELECT inventory_reports.*, COALESCE(products.name, 'Deleted product') AS product_name
+         FROM inventory_reports LEFT JOIN products ON products.id = inventory_reports.product_id
          WHERE inventory_reports.user_id = $1
          ORDER BY inventory_reports.created_at DESC LIMIT 20`,
         [req.session.user.id]

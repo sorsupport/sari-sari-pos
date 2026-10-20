@@ -1,37 +1,188 @@
 <%- include('../partials/head') %>
 <%- include('../partials/nav') %>
-<main class="container">
-  <h1>Sales Transactions</h1>
-
-  <div class="card">
-    <form method="GET" action="/admin/sales" class="form-inline">
-      <label>From <input type="date" name="from" value="<%= from %>" /></label>
-      <label>To <input type="date" name="to" value="<%= to %>" /></label>
-      <button type="submit" class="btn btn-secondary">Filter</button>
-      <a href="/admin/sales" class="btn btn-small">Clear</a>
-    </form>
+<main class="page">
+  <div class="page-head">
+    <h1 class="page-title">Sales</h1>
+    <a class="abtn" href="/admin/sales/export.csv?<%= queryString() %>"><%- icon('download', 16) %>Export CSV</a>
   </div>
 
-  <div class="card">
-    <% if (sales.length === 0) { %>
-      <p class="muted">No transactions found.</p>
-    <% } else { %>
-      <table class="table">
-        <thead><tr><th>Receipt</th><th>Cashier</th><th>Total</th><th>Paid</th><th>Change</th><th>When</th></tr></thead>
-        <tbody>
-          <% sales.forEach(s => { %>
-            <tr>
-              <td><a href="/admin/sales/<%= s.id %>"><%= s.receipt_no %></a></td>
-              <td><%= s.cashier %></td>
-              <td><%= peso(s.total_amount) %></td>
-              <td><%= peso(s.amount_paid) %></td>
-              <td><%= peso(s.change_amount) %></td>
-              <td><%= s.created_at %></td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
+  <form method="GET" action="/admin/sales" class="panel filter-bar">
+    <div class="afield">
+      <label for="q">Search</label>
+      <div class="input-icon">
+        <%- icon('search', 16) %>
+        <input class="ainput" type="search" id="q" name="q" value="<%= filters.q %>" placeholder="Receipt no. or product" />
+      </div>
+    </div>
+    <div class="afield">
+      <label for="from">From</label>
+      <input class="ainput" type="date" id="from" name="from" value="<%= filters.from %>" />
+    </div>
+    <div class="afield">
+      <label for="to">To</label>
+      <input class="ainput" type="date" id="to" name="to" value="<%= filters.to %>" />
+    </div>
+    <div class="afield">
+      <label for="cashier">Cashier</label>
+      <select class="ainput" id="cashier" name="cashier">
+        <option value="">All cashiers</option>
+        <% cashiers.forEach(c => { %><option value="<%= c.id %>" <%= String(c.id) === filters.cashier ? 'selected' : '' %>><%= c.full_name %></option><% }) %>
+      </select>
+    </div>
+    <div class="afield">
+      <label for="payment">Payment</label>
+      <select class="ainput" id="payment" name="payment">
+        <option value="">All</option>
+        <% Object.entries(h.PAYMENT_LABELS).forEach(([value, label]) => { %><option value="<%= value %>" <%= filters.payment === value ? 'selected' : '' %>><%= label %></option><% }) %>
+      </select>
+    </div>
+    <button type="submit" class="abtn abtn-dark"><%- icon('filter', 16) %>Apply</button>
+    <a href="/admin/sales" class="abtn abtn-ghost">Clear</a>
+  </form>
+
+  <section class="kpis">
+    <div class="panel kpi">
+      <p class="kpi-label">Gross sales</p>
+      <p class="kpi-value"><%= h.pesoWhole(totals.gross) %></p>
+    </div>
+    <div class="panel kpi">
+      <p class="kpi-label">Refunds</p>
+      <p class="kpi-value"><%= h.pesoWhole(totals.refunds) %></p>
+    </div>
+    <div class="panel kpi">
+      <p class="kpi-label">Net sales</p>
+      <p class="kpi-value"><%= h.pesoWhole(totals.net) %></p>
+    </div>
+    <div class="panel kpi">
+      <p class="kpi-label">Cash · GCash · Card</p>
+      <p class="kpi-value"><%= totals.hasPaid ? totals.split.join(' · ') + '%' : '—' %></p>
+    </div>
+  </section>
+
+  <div class="sales-grid">
+    <div class="panel">
+      <% if (!sales.length) { %>
+        <p class="empty">No sales match these filters.</p>
+      <% } else { %>
+        <div class="table-wrap">
+          <table class="atable">
+            <thead>
+              <tr><th>Receipt</th><th>Date</th><th>Items</th><th>Cashier</th><th>Payment</th><th>Status</th><th class="num">Total</th></tr>
+            </thead>
+            <tbody>
+              <% sales.forEach(s => { const href = '/admin/sales?' + queryString({ page, selected: s.id }); %>
+                <tr class="is-clickable<%= selected && selected.id === s.id ? ' is-selected' : '' %>" data-href="<%= href %>">
+                  <td class="mono strong"><a class="row-link" href="<%= href %>"<%- selected && selected.id === s.id ? ' aria-current="true"' : '' %>><%= s.receipt_no %></a></td>
+                  <td style="white-space: nowrap"><span class="sub"><%= h.shortDateTime(s.created_at) %></span></td>
+                  <td><%= s.items_summary || '—' %><span class="sub"><%= s.item_count %> item<%= s.item_count === 1 ? '' : 's' %></span></td>
+                  <td style="white-space: nowrap"><%= h.shortName(s.cashier) %></td>
+                  <td><span class="pill"><%= h.PAYMENT_LABELS[s.payment_method] %></span></td>
+                  <td><span class="pill pill-dot <%= s.status === 'refunded' ? 'pill-bad' : 'pill-ok' %>"><%= s.status === 'refunded' ? 'Refunded' : 'Completed' %></span></td>
+                  <td class="num strong"><%= peso(s.total_amount) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-foot">
+          <span>Showing <%= showingFrom %> to <%= showingTo %> of <%= totals.count.toLocaleString('en-US') %></span>
+          <% if (pageCount > 1) { %>
+            <nav class="pager" aria-label="Pages">
+              <% pages.forEach(p => { %>
+                <% if (p === '…') { %><span class="gap">…</span>
+                <% } else if (p === page) { %><span class="is-current" aria-current="page"><%= p %></span>
+                <% } else { %><a href="/admin/sales?<%= queryString({ page: p }) %>"><%= p %></a><% } %>
+              <% }) %>
+            </nav>
+          <% } %>
+        </div>
+      <% } %>
+    </div>
+
+    <% if (selected) {
+         const subtotal = selected.items.reduce((sum, i) => sum + i.subtotal, 0); %>
+      <aside class="panel receipt-card" aria-label="Receipt <%= selected.receipt_no %>">
+        <div class="receipt-top">
+          <img src="/Luminous%20Metallic%20Crescent%20Emblem.png" alt="" />
+          <span class="sidebar-wordmark">MOON</span>
+          <p>Receipt <%= selected.receipt_no %> · <%= h.longDateTime(selected.created_at) %></p>
+        </div>
+        <div class="receipt-body">
+          <ul class="receipt-lines">
+            <% selected.items.forEach(i => { %>
+              <li>
+                <span><span class="strong"><%= i.product_name %></span><span class="sub"><%= i.quantity %> × <%= peso(i.unit_price) %></span></span>
+                <span><%= peso(i.subtotal) %></span>
+              </li>
+            <% }) %>
+          </ul>
+          <div class="receipt-sums">
+            <div><span>Subtotal</span><span><%= peso(subtotal) %></span></div>
+            <div class="receipt-total"><span>Total</span><span><%= peso(selected.total_amount) %></span></div>
+          </div>
+          <div class="receipt-meta">
+            <span>
+              <% if (selected.payment_method === 'cash') { %>Paid <%= peso(selected.amount_paid) %> cash · Change <%= peso(selected.change_amount) %>
+              <% } else { %>Paid via <%= h.PAYMENT_LABELS[selected.payment_method] %><%= selected.payment_ref ? ' · Ref ' + selected.payment_ref : '' %><% } %>
+            </span>
+            <span style="white-space: nowrap">Cashier: <%= (selected.cashier || '').split(' ')[0] %></span>
+          </div>
+          <% if (selected.status === 'refunded') { %>
+            <p class="receipt-note">Refunded <%= h.shortDateTime(selected.refunded_at) %><%= selected.refunded_by_name ? ' by ' + selected.refunded_by_name : '' %></p>
+          <% } %>
+          <div class="receipt-actions-a">
+            <button type="button" class="abtn" id="printReceipt"><%- icon('printer', 16) %>Print</button>
+            <% if (selected.status === 'completed') { %>
+              <button type="button" class="abtn abtn-danger-outline" id="openRefund"><%- icon('refund', 16) %>Refund</button>
+            <% } else { %>
+              <button type="button" class="abtn" disabled>Refunded</button>
+            <% } %>
+          </div>
+        </div>
+      </aside>
     <% } %>
   </div>
 </main>
+
+<% if (selected && selected.status === 'completed') { %>
+  <div class="modal-backdrop" id="refundModal" hidden>
+    <form method="POST" action="/admin/sales/<%= selected.id %>/refund" class="modal" role="dialog" aria-modal="true" aria-labelledby="refundTitle">
+      <input type="hidden" name="back" value="<%= currentUrl %>" />
+      <div class="modal-head">
+        <div class="modal-icon"><%- icon('refund', 20) %></div>
+        <h2 id="refundTitle">Refund this sale?</h2>
+      </div>
+      <p>Receipt <strong><%= selected.receipt_no %></strong> for <strong><%= peso(selected.total_amount) %></strong> will be marked refunded and its items returned to stock. Hand the customer their money back separately.</p>
+      <div class="modal-actions">
+        <button type="button" class="abtn" data-close>Cancel</button>
+        <button type="submit" class="abtn abtn-danger"><%- icon('refund', 16) %>Refund <%= peso(selected.total_amount) %></button>
+      </div>
+    </form>
+  </div>
+<% } %>
+
+<script>
+  (function () {
+    document.querySelectorAll('tr[data-href]').forEach(function (tr) {
+      tr.addEventListener('click', function (e) { if (!e.target.closest('a')) location.href = tr.dataset.href; });
+    });
+
+    var print = document.getElementById('printReceipt');
+    if (print) print.addEventListener('click', function () {
+      document.body.classList.add('print-receipt');
+      window.print();
+      document.body.classList.remove('print-receipt');
+    });
+
+    var modal = document.getElementById('refundModal');
+    var open = document.getElementById('openRefund');
+    if (modal && open) {
+      var close = function () { modal.hidden = true; open.focus(); };
+      open.addEventListener('click', function () { modal.hidden = false; modal.querySelector('[data-close]').focus(); });
+      modal.querySelector('[data-close]').addEventListener('click', close);
+      modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modal.hidden) close(); });
+    }
+  })();
+</script>
 <%- include('../partials/foot') %>
